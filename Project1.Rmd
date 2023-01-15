@@ -1,0 +1,1005 @@
+---
+title: 'Wireless sensors for measuring drinking water quality: Deployments and Insights
+  from continuous and intermittent supply systems'
+author: "Ernesto Martinez"
+date: '2019'
+output: 
+  html_document:
+    theme: journal
+    highlight: tango
+    toc: true
+    number_sections: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    code_folding: show
+    self_contained: yes
+---
+```{r setup, include=FALSE, eval=TRUE}
+knitr::opts_chunk$set(include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width=10, fig.height=8)
+library(readxl)
+library(leaflet)
+library(mapview)
+library(sf)
+library(viridis)
+library(tidyverse)
+library(magrittr)
+library(ggplot2); theme_set(theme_bw(base_size = 12, base_family = "sans") + theme(plot.title = element_text(size = 22), axis.text = element_text(size = 13), axis.title=element_text(size = 13), legend.text=element_text(size = 12), legend.title=element_text(size = 13), legend.key.size=unit(0.75,"cm"), strip.text=element_text(size=13),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black")))
+library(dplyr)
+library(data.table)
+library(plotly)
+library(ragg)
+library(hrbrthemes)
+library(DT)
+library(cowplot)
+library(svglite)
+library(mxmaps)
+library(rgdal)
+library(fuzzyjoin)
+library(zoo)
+library(tidyquant)
+library(recipes)
+library(sp)
+library(timetk)
+library(ggbreak)
+library(spectral)
+library(rstatix)
+library(qwraps2)
+library(lubridate)
+library(here)
+library(ggtext)
+library(english)
+#(WD <- getwd())
+WD <- "/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/emarpaz_portfolio_repo/emarpaz.github.io/"
+
+if (!is.null(WD)) setwd(WD)
+source("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/influxtimeseriesfunctions.R")
+#function name is fetchinflux(node_id,parameter,t_start,t_end,tz) and inter_thresh(data,mintime)
+```
+
+## Maps
+
+```{r maps}
+library(ggplot2)
+library(ggmap)
+library(maps)
+library(mapdata)
+library(rgdal)
+library(cowplot)
+library(magick)
+
+aaimg <- magick::image_read("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/a2mapv2.png")
+meximg <- magick::image_read("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/mexmapv2.png")
+
+aa_img <- ggdraw() + draw_image(aaimg, scale = 1)
+mex_img <- ggdraw() + draw_image(meximg, scale = 1)
+
+
+prow <- plot_grid(
+  aa_img,
+  mex_img,
+  labels="AUTO", 
+  label_size = 10,
+  hjust=-1,
+  nrow=1
+)
+ prow
+
+save_plot("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/A2MEXmaps.png",plot=prow, ncol=2, nrow=1)
+```
+
+# Load and prepare the data
+Here we load and convert the X character to a datetime that can be plotted as a timeseries.
+```{r loaddata}
+library(lubridate)
+library(tidyr)
+
+
+nodes <- c("SKY001","SKY002","SKY003","SKY004","SKY005","SKY006","SKY007","SKY008","SKY010","SKY011","SKY012","SKY013","SKY014","SKY015")
+
+modifytime <- function(data){
+    #str(data) Uncomment if want to see output. Visual inspection is recommended to understand code   below
+    data$X <- gsub("\\+00:00", "", data$X)
+    names(data)[1] <- "Datetime"
+    data$Datetime <- ymd_hms(data$Datetime)
+    return(data.frame(data))
+    #str(data)
+  }
+
+#Electroconductivity signals
+for (node in nodes){
+
+  name <- paste("dataEC_",node,sep="")
+  assign(name,read.csv(paste("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/",node,"EC.csv",sep = ""),header=TRUE))
+  
+  assign(name, modifytime(eval(parse(text=name)))) # the use of eval and parse make sure the variable "name" is passed as a variable name and not simply as a string
+}
+
+#ORP Signals
+for (node in nodes){
+
+  name <- paste("dataORP_",node,sep="")
+  assign(name,read.csv(paste("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/",node,"ORP.csv",sep = ""),header=TRUE))
+  
+  assign(name, modifytime(eval(parse(text=name)))) # the use of eval and parse make sure the variable "name" is passed as a variable name and not simply as a string
+  
+}
+
+
+#Pressure Signals
+for (node in nodes){
+
+  name <- paste("dataPressure_",node,sep="")
+  assign(name,read.csv(paste("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/",node,"pres.csv",sep = ""),header=TRUE))
+  
+  assign(name, modifytime(eval(parse(text=name)))) # the use of eval and parse make sure the variable "name" is passed as a variable name and not simply as a string
+  
+}
+
+#pH Signals
+for (node in nodes){
+
+  name <- paste("datapH_",node,sep="")
+  assign(name,read.csv(paste("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/",node,"pH.csv",sep = ""),header=TRUE))
+  
+  assign(name, modifytime(eval(parse(text=name)))) # the use of eval and parse make sure the variable "name" is passed as a variable name and not simply as a string
+  
+}
+```
+
+## Brushed Data Points Removal. ORP Only
+
+```{r brushdata}
+brush <- function(OGdata,BrushedData){
+  
+  BrushedData$Datetime <- ymd_hms(BrushedData$Datetime)
+  brush <- OGdata[-which(OGdata$Datetime %in% BrushedData$Datetime),]
+    
+    return(data.frame(brush))
+  }
+
+for (node in nodes){
+  
+  if (node=="SKY014"){next}
+  
+  name <- paste("brushedData_ORP_",node,sep="")
+  assign(name,read.csv(paste("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/brushedData_ORP_",node,".csv",sep = ""),header=TRUE))
+  
+  OGname <- paste("dataORP_",node,sep="")
+  assign(name, brush(eval(parse(text=OGname)),eval(parse(text=name)))) # the use of eval and parse make sure the variable "name" is passed as a variable name and not simply as a string
+  
+}
+
+```
+
+
+
+## Data Collection Interruption
+To account for interruption windows, i.e. when data was not collected, we must insert NA's into the data set to prevent a continuous line from being plotted. For this, select a minimum interval between readings, let's say 1 hour in between data points. 
+
+Design a function that will add a column with a category number. This category will split the data between data interruption segments.
+
+```{r cleandata}
+inter_thresh <- function(data,mintime){
+  #Interruption Threshold. Input is a data frame with Datetime values. Column must specifically be named   Datetime. mintime is the threshold value in seconds. i.e. input 3600 if you want data points connected   if they are within 1 hour of each other.
+  idx <- c(1, diff(data$Datetime))
+  i2 <- c(1,which(idx > mintime), nrow(data)+1)
+  data$grp <- rep(1:length(diff(i2)), diff(i2))
+  return(data.frame(data))
+}
+
+t <- 5400 #time in seconds 
+
+
+#Electroconductivity
+for (node in nodes){
+
+name <- paste("dataEC_",node,sep="")
+assign(name, inter_thresh(eval(parse(text=name)),t))
+
+}
+
+
+
+#ORP
+for (node in nodes){
+
+  if(node=="SKY014"){next}
+  
+name <- paste("dataORP_",node,sep="")
+assign(name, inter_thresh(eval(parse(text=name)),t))
+
+name <- paste("brushedData_ORP_",node,sep="")
+assign(name,inter_thresh(eval(parse(text=name)),t))
+
+#write.csv(eval(parse(text=name)), paste("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/",node,"ORPclean.csv",sep = ""))
+
+}
+
+#pressure
+for (node in nodes){
+
+name <- paste("dataPressure_",node,sep="")
+assign(name, inter_thresh(eval(parse(text=name)),t))
+
+}
+
+#pH
+for (node in nodes){
+
+name <- paste("datapH_",node,sep="")
+assign(name, inter_thresh(eval(parse(text=name)),t))
+
+}
+```
+
+## Tagging each node with a Pressure District Label
+```{r tagdata}
+# In this section we tag the nodes and their specific dates with the pressure district in which they were deployed. 
+# Additionally, We label readings that seem to be broken. i.e. a broken pH probe that drifted.
+
+#SKY001 Northeast High
+startday <- ymd_hms("2019-09-11 00:00:01")
+endday <- ymd_hms("2020-04-01 00:00:01")
+dataEC_SKY001$Pdistrict <- ifelse(dataEC_SKY001$Datetime>startday & dataEC_SKY001$Datetime<endday,"Northeast","")
+datapH_SKY001$Pdistrict <- ifelse(datapH_SKY001$Datetime>startday & datapH_SKY001$Datetime<endday,"Northeast","")
+dataORP_SKY001$Pdistrict <- ifelse(dataORP_SKY001$Datetime>startday & dataORP_SKY001$Datetime<endday,"Northeast","")
+brushedData_ORP_SKY001$Pdistrict <- ifelse(brushedData_ORP_SKY001$Datetime>startday & brushedData_ORP_SKY001$Datetime<endday,"Northeast","")
+dataPressure_SKY001$Pdistrict <- ifelse(dataPressure_SKY001$Datetime>startday & dataPressure_SKY001$Datetime<endday,"Northeast","")
+
+#SKY003 West High
+startday <- ymd_hms("2020-02-13 00:00:01")
+endday <- ymd_hms("2021-01-05 00:00:01")
+dataEC_SKY003$Pdistrict <- ifelse(dataEC_SKY003$Datetime>startday & dataEC_SKY003$Datetime<endday,"West","")
+datapH_SKY003$Pdistrict <- ifelse(datapH_SKY003$Datetime>startday & datapH_SKY003$Datetime<endday,"West","")
+dataORP_SKY003$Pdistrict <- ifelse(dataORP_SKY003$Datetime>startday & dataORP_SKY003$Datetime<endday,"West","")
+brushedData_ORP_SKY003$Pdistrict <- ifelse(brushedData_ORP_SKY003$Datetime>startday & brushedData_ORP_SKY003$Datetime<endday,"West","")
+dataPressure_SKY003$Pdistrict <- ifelse(dataPressure_SKY003$Datetime>startday & dataPressure_SKY003$Datetime<endday,"West","")
+
+#SKY004 Gravity
+startday <- ymd_hms("2019-01-11 00:00:01")
+endday <- ymd_hms("2020-07-12 00:00:01")
+dataEC_SKY004$Pdistrict <- ifelse(dataEC_SKY004$Datetime>startday & dataEC_SKY004$Datetime<endday,"Gravity","")
+datapH_SKY004$Pdistrict <- ifelse(datapH_SKY004$Datetime>startday & datapH_SKY004$Datetime<endday,"Gravity","")
+dataORP_SKY004$Pdistrict <- ifelse(dataORP_SKY004$Datetime>startday & dataORP_SKY004$Datetime<endday,"Gravity","")
+brushedData_ORP_SKY004$Pdistrict <- ifelse(brushedData_ORP_SKY004$Datetime>startday & brushedData_ORP_SKY004$Datetime<endday,"Gravity","")
+dataPressure_SKY004$Pdistrict <- ifelse(dataPressure_SKY004$Datetime>startday & dataPressure_SKY004$Datetime<endday,"Gravity","")
+
+#SKY005 Geddes
+startday <- ymd_hms("2019-11-01 00:00:01")
+endday <- ymd_hms("2020-01-18 00:00:01")
+dataEC_SKY005$Pdistrict <- ifelse(dataEC_SKY005$Datetime>startday & dataEC_SKY005$Datetime<endday,"Geddes","")
+datapH_SKY005$Pdistrict <- ifelse(datapH_SKY005$Datetime>startday & datapH_SKY005$Datetime<endday,"Geddes","")
+dataORP_SKY005$Pdistrict <- ifelse(dataORP_SKY005$Datetime>startday & dataORP_SKY005$Datetime<endday,"Geddes","")
+brushedData_ORP_SKY005$Pdistrict <- ifelse(brushedData_ORP_SKY005$Datetime>startday & brushedData_ORP_SKY005$Datetime<endday,"Geddes","")
+dataPressure_SKY005$Pdistrict <- ifelse(dataPressure_SKY005$Datetime>startday & dataPressure_SKY005$Datetime<endday,"Geddes","")
+
+#SKY005 Geddes (2nd deployent)
+startday <- ymd_hms("2020-02-3 00:00:01")
+endday <- ymd_hms("2020-06-18 00:00:01")
+dataEC_SKY005$Pdistrict <- ifelse(dataEC_SKY005$Datetime>startday & dataEC_SKY005$Datetime<endday,"Geddes",dataEC_SKY005$Pdistrict)
+datapH_SKY005$Pdistrict <- ifelse(datapH_SKY005$Datetime>startday & datapH_SKY005$Datetime<endday,"Geddes",datapH_SKY005$Pdistrict)
+dataORP_SKY005$Pdistrict <- ifelse(dataORP_SKY005$Datetime>startday & dataORP_SKY005$Datetime<endday,"Geddes",dataORP_SKY005$Pdistrict)
+brushedData_ORP_SKY005$Pdistrict <- ifelse(brushedData_ORP_SKY005$Datetime>startday & brushedData_ORP_SKY005$Datetime<endday,"Geddes","")
+dataPressure_SKY005$Pdistrict <- ifelse(dataPressure_SKY005$Datetime>startday & dataPressure_SKY005$Datetime<endday,"Geddes",dataPressure_SKY005$Pdistrict)
+
+#SKY006 Geddes
+startday <- ymd_hms("2020-01-18 00:00:01")
+endday <- ymd_hms("2020-06-18 00:00:01")
+dataEC_SKY006$Pdistrict <- ifelse(dataEC_SKY006$Datetime>startday & dataEC_SKY006$Datetime<endday,"Geddes","")
+datapH_SKY006$Pdistrict <- ifelse(datapH_SKY006$Datetime>startday & datapH_SKY006$Datetime<endday,"Geddes","")
+dataORP_SKY006$Pdistrict <- ifelse(dataORP_SKY006$Datetime>startday & dataORP_SKY006$Datetime<endday,"Geddes","")
+brushedData_ORP_SKY006$Pdistrict <- ifelse(brushedData_ORP_SKY006$Datetime>startday & brushedData_ORP_SKY006$Datetime<endday,"Geddes","")
+dataPressure_SKY006$Pdistrict <- ifelse(dataPressure_SKY006$Datetime>startday & dataPressure_SKY006$Datetime<endday,"Geddes","")
+
+#SKY007 Geddes
+startday <- ymd_hms("2020-02-03 00:00:01")
+endday <- ymd_hms("2020-06-18 00:00:01")
+dataEC_SKY007$Pdistrict <- ifelse(dataEC_SKY007$Datetime>startday & dataEC_SKY007$Datetime<endday,"Geddes","")
+datapH_SKY007$Pdistrict <- ifelse(datapH_SKY007$Datetime>startday & datapH_SKY007$Datetime<endday,"Geddes","")
+dataORP_SKY007$Pdistrict <- ifelse(dataORP_SKY007$Datetime>startday & dataORP_SKY007$Datetime<endday,"Geddes","")
+brushedData_ORP_SKY007$Pdistrict <- ifelse(brushedData_ORP_SKY007$Datetime>startday & brushedData_ORP_SKY007$Datetime<endday,"Geddes","")
+dataPressure_SKY007$Pdistrict <- ifelse(dataPressure_SKY007$Datetime>startday & dataPressure_SKY007$Datetime<endday,"Geddes","")
+
+#SKY008 Northeast
+startday <- ymd_hms("2020-01-16 00:00:01")
+endday <- ymd_hms("2020-06-18 00:00:01")
+dataEC_SKY008$Pdistrict <- ifelse(dataEC_SKY008$Datetime>startday & dataEC_SKY008$Datetime<endday,"Northeast","")
+datapH_SKY008$Pdistrict <- ifelse(datapH_SKY008$Datetime>startday & datapH_SKY008$Datetime<endday,"Northeast","")
+dataORP_SKY008$Pdistrict <- ifelse(dataORP_SKY008$Datetime>startday & dataORP_SKY008$Datetime<endday,"Northeast","")
+brushedData_ORP_SKY008$Pdistrict <- ifelse(brushedData_ORP_SKY008$Datetime>startday & brushedData_ORP_SKY008$Datetime<endday,"Northeast","")
+dataPressure_SKY008$Pdistrict <- ifelse(dataPressure_SKY008$Datetime>startday & dataPressure_SKY008$Datetime<endday,"Northeast","")
+
+#SKY013 Gravity
+startday <- ymd_hms("2020-03-06 00:00:01")
+endday <- ymd_hms("2020-07-12 00:00:01")
+dataEC_SKY013$Pdistrict <- ifelse(dataEC_SKY013$Datetime>startday & dataEC_SKY013$Datetime<endday,"Gravity","")
+datapH_SKY013$Pdistrict <- ifelse(datapH_SKY013$Datetime>startday & datapH_SKY013$Datetime<endday,"Gravity","")
+dataORP_SKY013$Pdistrict <- ifelse(dataORP_SKY013$Datetime>startday & dataORP_SKY013$Datetime<endday,"Gravity","")
+brushedData_ORP_SKY013$Pdistrict <- ifelse(brushedData_ORP_SKY013$Datetime>startday & brushedData_ORP_SKY013$Datetime<endday,"Gravity","")
+dataPressure_SKY013$Pdistrict <- ifelse(dataPressure_SKY013$Datetime>startday & dataPressure_SKY013$Datetime<endday,"Gravity","")
+
+#SKY014 Gravity
+startday <- ymd_hms("2020-02-11 00:00:01")
+endday <- ymd_hms("2020-03-06 00:00:01")
+dataEC_SKY014$Pdistrict <- ifelse(dataEC_SKY014$Datetime>startday & dataEC_SKY014$Datetime<endday,"Gravity","")
+datapH_SKY014$Pdistrict <- ifelse(datapH_SKY014$Datetime>startday & datapH_SKY014$Datetime<endday,"Gravity","")
+dataORP_SKY014$Pdistrict <- ifelse(dataORP_SKY014$Datetime>startday & dataORP_SKY014$Datetime<endday,"Gravity","")
+#brushedData_ORP_SKY014$Pdistrict <- ifelse(brushedData_ORP_SKY014$Datetime>startday & brushedData_ORP_SKY014$Datetime<endday,"Gravity","")
+dataPressure_SKY014$Pdistrict <- ifelse(dataPressure_SKY014$Datetime>startday & dataPressure_SKY014$Datetime<endday,"Gravity","")
+
+#SKY015 Gravity
+startday <- ymd_hms("2020-02-05 00:00:01")
+endday <- ymd_hms("2020-06-06 00:00:01")
+dataEC_SKY015$Pdistrict <- ifelse(dataEC_SKY015$Datetime>startday & dataEC_SKY015$Datetime<endday,"Gravity","")
+datapH_SKY015$Pdistrict <- ifelse(datapH_SKY015$Datetime>startday & datapH_SKY015$Datetime<endday,"Gravity","")
+dataORP_SKY015$Pdistrict <- ifelse(dataORP_SKY015$Datetime>startday & dataORP_SKY015$Datetime<endday,"Gravity","")
+brushedData_ORP_SKY015$Pdistrict <- ifelse(brushedData_ORP_SKY015$Datetime>startday & brushedData_ORP_SKY015$Datetime<endday,"Gravity","")
+dataPressure_SKY015$Pdistrict <- ifelse(dataPressure_SKY015$Datetime>startday & dataPressure_SKY015$Datetime<endday,"Gravity","")
+```
+
+
+## Cumulative Summary Statistics of Signals
+
+```{r sumstats}
+
+getsignalstats <- function(data, signal, node){
+  
+  t = ifelse(signal=="pressure",12*24,3*24)
+  
+  length_points <- length(data$Datetime)
+  length_days <- length_points/t
+  min <- min(data[,2])
+  m <- mean(data[,2])
+  max <- max(data[,2])
+  s <- sd(data[,2])
+  v <- var(data[,2])
+  
+  signalstats <- data.frame("Node"=node,
+                 "Parameter" = signal,
+                 "Min"=min,
+                 "Mean"=m, 
+                 "Max"=max, 
+                 "StdDev"=s, 
+                 "Var"=v, 
+                 "length days"=length_days,
+                 "length points"=length_points
+                 )
+  
+  return(data.frame(signalstats))
+}
+
+signalstats <- data.frame("Node"=factor(),
+                          "Parameter"=factor(),
+                          "Min"=numeric(),
+                          "Mean"=numeric(),
+                          "Max"=numeric(),
+                          "StdDev"=numeric(),
+                          "Var"=numeric(),
+                          "length days"=numeric(),
+                          "length points"=numeric(),
+                          stringsAsFactors = TRUE)
+
+
+nodes <- c("SKY001","SKY002","SKY003","SKY004","SKY005","SKY006","SKY007","SKY008","SKY010","SKY011","SKY012","SKY013","SKY014","SKY015")
+
+#pH
+bluesky_pH_stats <- signalstats
+for (node in nodes){
+
+name <- paste("datapH_",node,sep="")
+bluesky_pH_stats <- rbind(bluesky_pH_stats, getsignalstats(eval(parse(text=name)),"pH",node))
+
+}
+
+#Pressure
+bluesky_pres_stats <- signalstats
+for (node in nodes){
+
+name <- paste("dataPressure_",node,sep="")
+bluesky_pres_stats <- rbind(bluesky_pres_stats, getsignalstats(eval(parse(text=name)),"pressure",node))
+
+}
+
+#EC
+bluesky_EC_stats <- signalstats
+for (node in nodes){
+
+name <- paste("dataEC_",node,sep="")
+bluesky_EC_stats <- rbind(bluesky_EC_stats, getsignalstats(eval(parse(text=name)),"EC",node))
+
+}
+
+#ORP
+bluesky_ORP_stats <- signalstats
+for (node in nodes){
+
+name <- paste("dataORP_",node,sep="")
+bluesky_ORP_stats <- rbind(bluesky_ORP_stats, getsignalstats(eval(parse(text=name)),"ORP",node))
+bluesky_ORP_stats
+}
+```
+
+
+## Cumulative statistics per pressure district
+
+```{r cumstats2}
+getstatspdist <- function(data, signal, node, pdist,timeframe){
+  
+  t <- ifelse(signal=="pressure",12*24,3*24)
+  d <- timeframe #how many days of data
+  
+  td <- ifelse(sum(data$Pdistrict==pdist,na.rm=TRUE)>(t*d),t*d,sum(data$Pdistrict==pdist,na.rm=TRUE)) #sum function is counting the instances in which TRUE occurs
+  
+  
+  timeframedata <- data[data$Pdistrict==pdist,][1:td,]
+  
+  if ((node == "SKY005") && (pdist == "Geddes")){
+    timeframedata <- timeframedata[timeframedata$Datetime<=ymd_hms("2020-03-28 00:00:01"),]
+  }
+
+
+  min <- min(timeframedata[,2])
+  m <- mean(timeframedata[,2])
+  max <- max(timeframedata[,2])
+  s <- sd(timeframedata[,2])
+  v <- var(timeframedata[,2])
+  
+  signalstats <- data.frame("Node"=node,
+                 "Parameter" = signal,
+                 "PressureDistrict" = pdist,
+                 "Min"=min,
+                 "Mean"=m, 
+                 "Max"=max, 
+                 "StdDev"=s, 
+                 "Var"=v
+                 )
+  
+  return(data.frame(signalstats))
+}
+
+signalstats <- data.frame("Node"=factor(),
+                          "Parameter"=factor(),
+                          "PressureDistrict"=factor(),
+                          "Min"=numeric(),
+                          "Mean"=numeric(),
+                          "Max"=numeric(),
+                          "StdDev"=numeric(),
+                          "Var"=numeric(),
+                          stringsAsFactors = TRUE)
+
+nodes <- c("SKY001","SKY002","SKY003","SKY004","SKY005","SKY006","SKY007","SKY008","SKY010","SKY011","SKY012","SKY013","SKY014","SKY015")
+
+pdists <- c("Northeast","Gravity","West","Geddes")
+
+#pH
+bluesky_pH_stats_pdist <- signalstats
+for (node in nodes){
+
+  for (pdist in pdists){
+    name <- paste("datapH_",node,sep="")
+    bluesky_pH_stats_pdist <- rbind(bluesky_pH_stats_pdist, getstatspdist(eval(parse(text=name)),"pH",node,pdist,5))
+  }
+}
+bluesky_pH_stats_pdist <- bluesky_pH_stats_pdist[complete.cases(bluesky_pH_stats_pdist),]
+
+#Pressure
+bluesky_pres_stats_pdist <- signalstats
+for (node in nodes){
+    for (pdist in pdists){
+      name <- paste("dataPressure_",node,sep="")
+      bluesky_pres_stats_pdist <- rbind(bluesky_pres_stats_pdist, getstatspdist(eval(parse(text=name)),"pressure",node,pdist,365))
+    }
+}
+bluesky_pres_stats_pdist <- bluesky_pres_stats_pdist[complete.cases(bluesky_pres_stats_pdist),]
+
+#EC
+bluesky_EC_stats_pdist <- signalstats
+for (node in nodes){
+  for (pdist in pdists){
+    name <- paste("dataEC_",node,sep="")
+    bluesky_EC_stats_pdist <- rbind(bluesky_EC_stats_pdist, getstatspdist(eval(parse(text=name)),"EC",node,pdist,365))
+  }
+}
+bluesky_EC_stats_pdist <- bluesky_EC_stats_pdist[complete.cases(bluesky_EC_stats_pdist),]
+
+
+#ORP
+bluesky_ORP_stats_pdist <- signalstats
+for (node in nodes){
+  for(pdist in pdists){
+    name <- paste("dataORP_",node,sep="")
+    bluesky_ORP_stats_pdist <- rbind(bluesky_ORP_stats_pdist, getstatspdist(eval(parse(text=name)),"ORP",node,pdist,365))
+  }
+}
+bluesky_ORP_stats_pdist <- bluesky_ORP_stats_pdist[complete.cases(bluesky_ORP_stats_pdist),]
+
+#Now rbind all the tables together.
+
+bluesky_pdist_stats <- rbind(bluesky_pH_stats_pdist,bluesky_pres_stats_pdist,bluesky_EC_stats_pdist,bluesky_ORP_stats_pdist)
+bluesky_pdist_stats
+```
+
+## Create a table of Deployments per pressure district
+```{r statstable}
+library(gt)
+library(gtable)
+library(gtsummary)
+library(dplyr)
+library(tidyr)
+library(flextable)
+
+bluesky_pdist_stats <- bluesky_pdist_stats %>%
+                          group_by(Parameter, PressureDistrict)
+
+# pressuredistrict_waterquality <- data.frame("Pressure District"= factor(),
+#                                              "pH" = numeric(),
+#                                              "EC" = numeric(),
+#                                              "ORP"= numeric(),
+#                                              "Pressure"= numeric(),
+#                                             stringsAsFactors = TRUE
+#                                             )
+
+pressuredistrict_waterquality <- data.frame("Pressure District"= bluesky_pdist_stats$PressureDistrict[1:10],
+                                             "pH.Mean" = bluesky_pdist_stats$Mean[bluesky_pdist_stats$Parameter=="pH"],
+                                             "pH.StdDev" = bluesky_pdist_stats$StdDev[bluesky_pdist_stats$Parameter=="pH"],
+                                             "EC.Mean" = bluesky_pdist_stats$Mean[bluesky_pdist_stats$Parameter=="EC"],
+                                             "EC.StdDev" = bluesky_pdist_stats$StdDev[bluesky_pdist_stats$Parameter=="EC"],
+                                             "ORP.Mean"= bluesky_pdist_stats$Mean[bluesky_pdist_stats$Parameter=="ORP"],
+                                             "ORP.StdDev"= bluesky_pdist_stats$StdDev[bluesky_pdist_stats$Parameter=="ORP"],
+                                             "Pressure.Mean"= bluesky_pdist_stats$Mean[bluesky_pdist_stats$Parameter=="pressure"],
+                                             "Pressure.StdDev"= bluesky_pdist_stats$StdDev[bluesky_pdist_stats$Parameter=="pressure"] 
+                                            )
+
+tab1 <- pressuredistrict_waterquality %>%
+  gt(groupname_col = "Pressure.District") %>%
+  fmt_number(columns = vars(EC.Mean, EC.StdDev, ORP.Mean,ORP.StdDev, Pressure.Mean,Pressure.StdDev), decimals = 0) %>%
+  fmt_number(columns = vars(pH.Mean,pH.StdDev), decimals = 1) %>%
+  cols_width(everything() ~ px(60)) %>%
+  tab_spanner(label = "pH", columns = matches("pH.Mean|pH.StdDev")) %>%
+  tab_spanner(label = "ORP (mV)", columns = matches("ORP.Mean|ORP.StdDev")) %>%
+  tab_spanner(label = "EC (uS/cm)", columns = matches("EC.Mean|EC.StdDev")) %>%
+  tab_spanner(label = "Pressure (psi)", columns = matches("Pressure.Mean|Pressure.StdDev")) %>%
+  cols_label(
+    pH.Mean = md("Mean"),
+    pH.StdDev = md("SD"),
+    ORP.Mean = md("Mean"),
+    ORP.StdDev = md("SD"),
+    EC.Mean = md("Mean"),
+    EC.StdDev = md("SD"),
+    Pressure.Mean = md("Mean"),
+    Pressure.StdDev = md("SD")
+  ) %>%
+  cols_align(
+    align = "center"
+  ) %>%
+  tab_header(
+    title = md("Table S1: Ann Arbor Water Quality Nodes Deployment"),
+    subtitle = "Summary statistics per pressure district in Ann Arbor"
+  ) %>%
+  tab_footnote(
+    footnote=md("Due to common probe malfunction pH statistics were calculated with first 5 days worth of data"),
+    locations = cells_column_labels(columns = vars(pH.Mean,pH.StdDev))
+  )
+
+tab1
+
+gtsave(tab1, "PressureDistrict_waterqualityTable.png",expand = 10, path = "/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/")
+gtsave(tab1, "PressureDistrict_waterqualityTable.rtf",expand = 10, path = "/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/")
+```
+
+# Plots
+
+## EC
+Next we plot the timeseries using ggplot2 
+
+```{r ecplot}
+# Libraries
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(hrbrthemes)
+library(lubridate)
+library(colorspace)
+
+#pal <- choose_palette()
+
+timestart <- ymd_hms("2020-02-15 00:00:01")
+timeend <- ymd_hms("2020-04-30 23:59:59")
+
+#Key: A: Northeast High; B: West High; C: Gravity; D: Geddes High
+
+
+p2 <- ggplot(dataEC_SKY001, aes(x=Datetime, y=Electroconductivity,color=variable)) +
+    geom_line(aes(group=grp, color="A1")) +
+    geom_line(data=dataEC_SKY002, aes(group=grp, color="Lab1"), size=0.25) +
+    geom_line(data=dataEC_SKY003, aes(group=grp, color="B1"), size=0.25) +
+    geom_line(data=dataEC_SKY004, aes(group=grp, color="C1"), size=0.25) +
+    geom_line(data=dataEC_SKY005, aes(group=grp, color="D1"), size=0.25) +
+    geom_line(data=dataEC_SKY006, aes(group=grp, color="D2"), size=0.25) +
+    geom_line(data=dataEC_SKY007, aes(group=grp, color="D3"), size=0.25) +
+    geom_line(data=dataEC_SKY008, aes(group=grp, color="A2"), size=0.25) +
+    geom_line(data=dataEC_SKY010, aes(group=grp, color="A1"), size=0.25) +
+    geom_line(data=dataEC_SKY011, aes(group=grp, color="Lab2"), size=0.25) +
+    geom_line(data=dataEC_SKY012, aes(group=grp, color="Lab3"), size=0.25) +
+    geom_line(data=dataEC_SKY013, aes(group=grp, color="C2"), size=0.25) +
+    scale_color_manual(name = "Deployment Site",values=c( "#C0004B", "#DD00A7", "#CA00E7", "#746EFF", "#009FF5", "#00C8A3", "#00CE67", "#88CC00", "#D3C600", "#FFBB52", "#FFAE9F")) +
+    theme_light() +
+    xlab("Date") +
+    ylim(600,1000) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%m-%Y")) +
+    ggtitle("Electroconductivity in Ann Arbor")
+
+ggplotly(p2)
+
+```
+
+The conductivity signals above all show an increase accross the city. All signals have the same trend, however, several signals are incomplete because of service/data interruption. The benefit of having the spatially-distributed wireless network is a) to have measurement redundancy in case one sensor stops working, and b) to have data on how the network is behaving hydraulically. 
+
+
+## ORP
+Next we want to plot the ORP signals
+
+```{r orpplot, fig.align = "center"}
+# Libraries
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(hrbrthemes)
+library(png)
+library(cowplot)
+library(magick)
+
+timestart <- ymd_hms("2020-01-01 00:00:01")
+timeend <- ymd_hms("2020-03-30 23:59:59")
+
+p1 <- ggplot(dataORP_SKY001, aes(x=Datetime, y=ORP,color=variable)) +
+    geom_line(aes(group=grp, color="sky001")) +
+    geom_line(data=dataORP_SKY002, aes(group=grp, color="sky002")) +
+    geom_line(data=dataORP_SKY003, aes(group=grp, color="sky003")) +
+    geom_line(data=dataORP_SKY004, aes(group=grp, color="sky004")) +
+    geom_line(data=dataORP_SKY005, aes(group=grp, color="sky005")) +
+    geom_line(data=dataORP_SKY006, aes(group=grp, color="sky006")) +
+    geom_line(data=dataORP_SKY007, aes(group=grp, color="sky007")) +
+    geom_line(data=dataORP_SKY008, aes(group=grp, color="sky008")) +
+    geom_line(data=dataORP_SKY010, aes(group=grp, color="sky010")) +
+    geom_line(data=dataORP_SKY011, aes(group=grp, color="sky011")) +
+    geom_line(data=dataORP_SKY012, aes(group=grp, color="sky012")) +
+    geom_line(data=dataORP_SKY013, aes(group=grp, color="sky013")) +
+    geom_line(data=dataORP_SKY015, aes(group=grp, color="sky015")) +
+    xlab("Date") +
+    ylim(0,800) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%m-%Y")) +
+    ggtitle("ORP in Ann Arbor")
+
+
+
+p2 <- ggplot(dataORP_SKY001, aes(x=Datetime, y=ORP,color=variable)) +
+    geom_line(aes(group=grp, color="Northeast High")) +
+    geom_line(data=dataORP_SKY002, aes(group=grp, color="Lab")) +
+    geom_line(data=dataORP_SKY003, aes(group=grp, color="West High")) +
+    geom_line(data=dataORP_SKY004, aes(group=grp, color="Gravity")) +
+    geom_line(data=dataORP_SKY005, aes(group=grp, color="Geddes High")) +
+    geom_line(data=dataORP_SKY006, aes(group=grp, color="Geddes High")) +
+    geom_line(data=dataORP_SKY007, aes(group=grp, color="Geddes High")) +
+    geom_line(data=dataORP_SKY008, aes(group=grp, color="Northeast High")) +
+    geom_line(data=dataORP_SKY010, aes(group=grp, color="Northeast High")) +
+    geom_line(data=dataORP_SKY011, aes(group=grp, color="Lab")) +
+    geom_line(data=dataORP_SKY012, aes(group=grp, color="Lab")) +
+    geom_line(data=dataORP_SKY013, aes(group=grp, color="Gravity")) +
+    geom_line(data=dataORP_SKY015, aes(group=grp, color="Gravity")) +
+    xlab("Date") +
+    ylim(0,800) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%m-%Y")) +
+    ggtitle("ORP in Ann Arbor by Pressure District")
+
+
+
+
+p3 <- ggplot(dataORP_SKY001, aes(x=Datetime, y=ORP,color=variable)) +
+    geom_line(aes(group=grp, color="Northeast High")) +
+    geom_line(data=dataORP_SKY002, aes(group=grp, color="Lab")) +
+    geom_line(data=dataORP_SKY003, aes(group=grp, color="West High")) +
+    geom_line(data=dataORP_SKY004, aes(group=grp, color="Gravity")) +
+    geom_line(data=dataORP_SKY005, aes(group=grp, color="Geddes High")) +
+    geom_line(data=dataORP_SKY006, aes(group=grp, color="Geddes High")) +
+    geom_line(data=dataORP_SKY007, aes(group=grp, color="Geddes High")) +
+    geom_line(data=dataORP_SKY008, aes(group=grp, color="Northeast High")) +
+    geom_line(data=dataORP_SKY010, aes(group=grp, color="Northeast High")) +
+    geom_line(data=dataORP_SKY011, aes(group=grp, color="Lab")) +
+    geom_line(data=dataORP_SKY012, aes(group=grp, color="Lab")) +
+    geom_line(data=dataORP_SKY013, aes(group=grp, color="Gravity")) +
+    geom_line(data=dataORP_SKY015, aes(group=grp, color="Gravity")) +
+    xlab("Date") +
+    ylim(0,800) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%m-%Y")) +
+    ggtitle("ORP in Ann Arbor")
+
+
+
+
+# The palette with grey:
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+p4 <- ggplot(dataORP_SKY001, aes(x=Datetime, y=ORP,color=variable)) +
+    geom_line(aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY002, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY003, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY004, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY005, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY006, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY007, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY008, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY010, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY011, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY012, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY013, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=dataORP_SKY015, aes(group=grp, color="Raw Data"), color = "grey") +
+    geom_line(data=brushedData_ORP_SKY001, aes(group=grp, color="Site 1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY002, aes(group=grp, color="Site 2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY003, aes(group=grp, color="Site 3"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY004, aes(group=grp, color="Site 4"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY005, aes(group=grp, color="Site 5"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY006, aes(group=grp, color="Site 6"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY007, aes(group=grp, color="Site 7"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY008, aes(group=grp, color="Site 8"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY010, aes(group=grp, color="Site 10"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY011, aes(group=grp, color="Site 11"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY012, aes(group=grp, color="Site 12"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY013, aes(group=grp, color="Site 13"), size=.25  ) +
+    geom_line(data=brushedData_ORP_SKY015, aes(group=grp, color="Site 15"), size=.25  ) +
+    xlab("Date") +
+    ylim(0,800) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%m-%Y")) +
+    ggtitle("ORP in Ann Arbor")
+
+
+#Key: A: Northeast High; B: West High; C: Gravity; D: Geddes High
+p5 <- ggplot(dataORP_SKY001, aes(x=Datetime, y=ORP,color=variable)) +
+    geom_line(aes(group=grp, color="A1"),size=0.25) +
+    geom_line(data=dataORP_SKY002, aes(group=grp, color="Lab1"),size=0.25) +
+    geom_line(data=dataORP_SKY003, aes(group=grp, color="B1"),size=0.25) +
+    geom_line(data=dataORP_SKY004, aes(group=grp, color="C1"),size=0.25) +
+      geom_point(data=brushedData_ORP_SKY004[sample(nrow(brushedData_ORP_SKY004), 20), ],aes(colour="C1"),shape=17,size=3) +
+    geom_line(data=dataORP_SKY005, aes(group=grp, color="D1"),size=0.25) +
+    geom_line(data=dataORP_SKY006, aes(group=grp, color="D2"),size=0.25) +
+    geom_line(data=dataORP_SKY007, aes(group=grp, color="D3"),size=0.25) +
+    geom_line(data=dataORP_SKY008, aes(group=grp, color="A2"),size=0.25) +
+    geom_line(data=dataORP_SKY010, aes(group=grp, color="A1"),size=0.25) +
+    geom_line(data=dataORP_SKY011, aes(group=grp, color="Lab2"),size=0.25) +
+    geom_line(data=dataORP_SKY012, aes(group=grp, color="Lab3"),size=0.25) +
+    geom_line(data=dataORP_SKY013, aes(group=grp, color="C2"),size=0.25) +
+      geom_point(data=brushedData_ORP_SKY013[sample(nrow(brushedData_ORP_SKY013), 10), ],aes(colour="C2"),shape=15,size=3) +
+    geom_line(data=dataORP_SKY015, aes(group=grp, color="C3"),size=0.25) +
+      geom_point(data=brushedData_ORP_SKY015[sample(nrow(brushedData_ORP_SKY015), 15), ],aes(colour="C3"),shape=18,size=4) +
+    scale_color_manual(name = "Deployment Site", values=c("#C0004B", "#DD00A7", "#CA00E7", "#746EFF", "#009FF5", "#00BBD3", "#00C8A3", "#00CE67", "#88CC00", "#D3C600", "#FFBB52", "#FFAE9F","gray90")) +
+    theme_light() +
+    xlab("Date") +
+    ylim(0,800) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%b '%y")) +
+    ggtitle("Raw ORP Signals\nfrom Ann Arbor") +
+    theme(axis.text.x = element_text(angle = 25, hjust=1),
+        axis.text=element_text(size=22),
+        axis.title = element_text(size=22),
+        plot.title = element_text(hjust=0.5,size=24))
+
+
+p6 <- ggplot(dataORP_SKY001, aes(x=Datetime, y=ORP,color=variable)) +
+    geom_line(aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY002, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY003, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY004, aes(group=grp, color="Raw Data")) +
+   geom_point(data=brushedData_ORP_SKY004[sample(nrow(brushedData_ORP_SKY004), 20), ],aes(colour="Raw Data"),shape=17,size=3) +
+    geom_line(data=dataORP_SKY005, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY006, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY007, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY008, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY010, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY011, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY012, aes(group=grp, color="Raw Data")) +
+    geom_line(data=dataORP_SKY013, aes(group=grp, color="Raw Data")) +
+     geom_point(data=brushedData_ORP_SKY013[sample(nrow(brushedData_ORP_SKY013), 10), ],aes(colour="Raw Data"),shape=15,size=3) +
+    geom_line(data=dataORP_SKY015, aes(group=grp, color="Raw Data")) +
+   geom_point(data=brushedData_ORP_SKY015[sample(nrow(brushedData_ORP_SKY015), 15), ],aes(colour="Raw Data"),shape=18,size=4) +
+    geom_line(data=brushedData_ORP_SKY001, aes(group=grp, color="A1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY002, aes(group=grp, color="Lab1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY003, aes(group=grp, color="B1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY004, aes(group=grp, color="C1"), size=.25 ) +
+   geom_point(data=brushedData_ORP_SKY004[sample(nrow(brushedData_ORP_SKY004), 20), ],aes(colour="C1"),shape=17,size=3) +
+    geom_line(data=brushedData_ORP_SKY005, aes(group=grp, color="D1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY006, aes(group=grp, color="D2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY007, aes(group=grp, color="D3"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY008, aes(group=grp, color="A2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY010, aes(group=grp, color="A1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY011, aes(group=grp, color="Lab2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY012, aes(group=grp, color="Lab3"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY013, aes(group=grp, color="C2"), size=.25 ) +
+     geom_point(data=brushedData_ORP_SKY013[sample(nrow(brushedData_ORP_SKY013), 10), ],aes(colour="C2"),shape=15,size=3) +
+    geom_line(data=brushedData_ORP_SKY015, aes(group=grp, color="C3"), size=.25 ) +
+   geom_point(data=brushedData_ORP_SKY015[sample(nrow(brushedData_ORP_SKY015), 15), ],aes(colour="C3"),shape=18,size=4) +
+    scale_color_manual(name = "Deployment Site", values=c("#C0004B", "#DD00A7", "#CA00E7", "#746EFF", "#009FF5", "#00BBD3", "#00C8A3", "#00CE67", "#88CC00", "#D3C600", "#FFBB52", "#FFAE9F","gray90")) +
+    theme_light() +
+    xlab("Date") +
+    ylim(0,800) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%b '%y")) +
+    ggtitle("Brushed ORP Signals\nin Ann Arbor") +
+      theme(axis.text.x = element_text(angle = 25, hjust=1),
+        axis.text=element_text(size=22),
+        axis.title = element_text(size=22),
+        plot.title = element_text(hjust=0.5,size=24))
+
+p7 <- ggplot(brushedData_ORP_SKY001, aes(x=Datetime, y=ORP,color=variable)) +
+    geom_line(aes(group=grp, color="A1"), size=.25) +
+    geom_line(data=brushedData_ORP_SKY002, aes(group=grp, color="Lab1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY003, aes(group=grp, color="B1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY004, aes(group=grp, color="C1"), size=.25 ) +
+     geom_point(data=brushedData_ORP_SKY004[sample(nrow(brushedData_ORP_SKY004), 20), ],aes(colour="C1"),shape=17,size=3) +
+    geom_line(data=brushedData_ORP_SKY005, aes(group=grp, color="D1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY006, aes(group=grp, color="D2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY007, aes(group=grp, color="D3"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY008, aes(group=grp, color="A2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY010, aes(group=grp, color="A1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY011, aes(group=grp, color="Lab2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY013, aes(group=grp, color="C2"), size=.25 ) +
+   geom_point(data=brushedData_ORP_SKY013[sample(nrow(brushedData_ORP_SKY013), 10), ],aes(colour="C2"),shape=15,size=3) +
+    geom_line(data=brushedData_ORP_SKY015, aes(group=grp, color="C3"), size=.25 ) +
+  geom_point(data=brushedData_ORP_SKY015[sample(nrow(brushedData_ORP_SKY015), 15), ],aes(colour="C3"),shape=18,size=4) +
+    scale_color_manual(name = "Deployment Site", values=c("#C0004B", "#DD00A7", "#CA00E7", "#746EFF", "#009FF5", "#00BBD3", "#00C8A3", "#00CE67", "#88CC00", "#D3C600", "#FFBB52")) +
+    theme_light() +
+    xlab("Date") +
+    ylim(0,800) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%b '%y")) +
+    ggtitle("Clean ORP Signals\nin Ann Arbor") +
+      theme(axis.text.x = element_text(angle = 25, hjust=1),
+        axis.text=element_text(size=22),
+        axis.title = element_text(size=22),
+        plot.title = element_text(hjust=0.5,size=24))
+
+
+theme_set(theme_cowplot())
+img <- magick::image_read("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/a2subshape2.png")
+img <- image_trim(img)
+
+p5_img <- ggdraw(p5 + theme(legend.position = "none") + xlab(NULL)) #+ draw_image(img,x=0.70,y=1.23,hjust=1,vjust=1,scale=0.25)
+p6_img <- ggdraw(p6 + theme(legend.position = "none") + xlab(NULL) + ylab(NULL)) #+ draw_image(img,x=0.70,y=1.23,hjust=1,vjust=1,scale=0.25)
+p7_img <- ggdraw(p7 + theme(legend.position = "none") + xlab(NULL) + ylab(NULL)) #+ draw_image(img,x=0.70,y=1.23,hjust=1,vjust=1,scale=0.25)
+sub_map <- ggdraw() + draw_image(img)
+
+prow <- plot_grid(
+  p5_img,
+  p6_img,
+  p7_img,
+  sub_map,
+  labels=c("A","B","C"), 
+  label_size = 22,
+  hjust=-1,
+  nrow=1,
+  ncol=4,
+  rel_widths = c(1,1,1,0.5)
+)
+
+prow
+
+
+ggplotly(p5)
+```
+
+In the ORP plots we can see the base reading of ORP in Ann Arbor's water is ~400 mV. The signals contain significant amount of noise mostly associated with "start up" conditioning values - meaning that under the current sampling protocol a stable ORP reading is not obtained until roughly 3-5 hours later. Start-up values start low and rapidly increase to 400. We also see from the color-coded signals (per pressure district) that all districts measure at the base ORP level, but in gravity high the probes start reading higher values, this might be related to change in the water chemistry in these particular location or it might be that the probes were not working correctly. No grab sample data is available. 
+
+## Final plots for ORP and EC with maps included
+```{r finalplot, fig.align = "center"}
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(hrbrthemes)
+library(lubridate)
+library(colorspace)
+library(png)
+library(cowplot)
+library(magick)
+
+
+theme_set(theme_cowplot())
+img <- magick::image_read("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbook Air/UMICH/Research/My Research/Realtime water systems lab/RStudioCoding/a2subshape2.png")
+img <- image_trim(img)
+
+#pal <- choose_palette()
+
+timestart <- ymd_hms("2020-02-15 00:00:01")
+timeend <- ymd_hms("2020-04-30 23:59:59")
+
+#Key: A: Northeast High; B: West High; C: Gravity; D: Geddes High
+
+p1 <- ggplot(dataEC_SKY001, aes(x=Datetime, y=Electroconductivity,color=variable)) +
+    geom_line(aes(group=grp, color="A1")) +
+    geom_line(data=dataEC_SKY002, aes(group=grp, color="Lab1"), size=0.25) +
+    geom_line(data=dataEC_SKY003, aes(group=grp, color="B1"), size=0.25) +
+    geom_line(data=dataEC_SKY004, aes(group=grp, color="C1"), size=0.25) +
+    geom_line(data=dataEC_SKY005, aes(group=grp, color="D1"), size=0.25) +
+    geom_line(data=dataEC_SKY006, aes(group=grp, color="D2"), size=0.25) +
+    geom_line(data=dataEC_SKY007, aes(group=grp, color="D3"), size=0.25) +
+    geom_line(data=dataEC_SKY008, aes(group=grp, color="A2"), size=0.25) +
+    geom_line(data=dataEC_SKY010, aes(group=grp, color="A1"), size=0.25) +
+    geom_line(data=dataEC_SKY011, aes(group=grp, color="Lab2"), size=0.25) +
+    geom_line(data=dataEC_SKY012, aes(group=grp, color="Lab3"), size=0.25) +
+    geom_line(data=dataEC_SKY013, aes(group=grp, color="C2"), size=0.25) +
+    scale_color_manual(name = "Deployment Site",values=c( "#C0004B", "#DD00A7", "#CA00E7", "#746EFF", "#009FF5", "#00C8A3", "#00CE67", "#88CC00", "#D3C600", "#FFBB52", "#FFAE9F")) +
+    theme_light() +
+    xlab("Date") +
+    ylab("Electroconductivity (uS/cm)") +
+    ylim(600,1000) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%b '%y")) +
+    ggtitle("Electroconductivity signals \ndetecting a system-wide event") +
+    theme(axis.text.x = element_text(angle = 25, hjust=1),
+        axis.text=element_text(size=15),
+        axis.title = element_text(size=15),
+        plot.title = element_text(hjust=0.5,size=17))
+
+
+
+
+timestart <- ymd_hms("2020-01-01 00:00:01")
+timeend <- ymd_hms("2020-03-30 23:59:59")
+
+
+p6 <- ggplot(brushedData_ORP_SKY001, aes(x=Datetime, y=ORP,color=variable)) +
+    geom_line(aes(group=grp, color="A1"), size=.25) +
+    geom_line(data=brushedData_ORP_SKY002, aes(group=grp, color="Lab1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY003, aes(group=grp, color="B1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY004, aes(group=grp, color="C1"), size=.25 ) +
+    geom_point(data=brushedData_ORP_SKY004[sample(nrow(brushedData_ORP_SKY004), 20), ],aes(colour="C1"),shape=17,size=3) +
+    geom_line(data=brushedData_ORP_SKY005, aes(group=grp, color="D1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY006, aes(group=grp, color="D2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY007, aes(group=grp, color="D3"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY008, aes(group=grp, color="A2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY010, aes(group=grp, color="A1"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY011, aes(group=grp, color="Lab2"), size=.25 ) +
+    geom_line(data=brushedData_ORP_SKY013, aes(group=grp, color="C2"), size=.25 ) +
+  geom_point(data=brushedData_ORP_SKY013[sample(nrow(brushedData_ORP_SKY013), 10), ],aes(colour="C2"),shape=15,size=3) +
+    geom_line(data=brushedData_ORP_SKY015, aes(group=grp, color="C3"), size=.25 ) +
+    geom_point(data=brushedData_ORP_SKY015[sample(nrow(brushedData_ORP_SKY015), 15), ],aes(colour="C3"),shape=18,size=4) +
+    scale_color_manual(name = "Deployment Site", values=c("#C0004B", "#DD00A7", "#CA00E7", "#746EFF", "#009FF5", "#00BBD3", "#00C8A3", "#00CE67", "#88CC00", "#D3C600", "#FFBB52")) +
+    theme_light() +
+    xlab("Date") +
+    ylab("ORP (mV)") +
+    ylim(0,800) +
+    scale_x_datetime(limit=c(timestart,timeend),date_labels=format("%b '%y")) +
+    ggtitle("ORP signals from Ann Arbor measuring\nchloraminated drinking water") +
+    theme(axis.text.x = element_text(angle = 25, hjust=1),
+        axis.text=element_text(size=15),
+        axis.title = element_text(size=15),
+        plot.title = element_text(hjust=0.5,size=17))
+
+
+
+p2 <- ggdraw() + draw_image(img)
+
+legend_b <- get_legend(
+    p6 + 
+    guides(color = guide_legend(nrow = 1)) +
+    theme(legend.position = "bottom")
+)
+
+
+
+p1_img <- ggdraw(p1 + theme(legend.position = "none") + xlab(NULL)) #+ draw_image(img,x=0.70,y=1.23,hjust=1,vjust=1,scale=0.25)
+p6_img <- ggdraw(p6 + theme(legend.position = "none") + xlab(NULL)) #+ draw_image(img,x=0.70,y=1.23,hjust=1,vjust=1,scale=0.25)
+sub_map <- ggdraw() + draw_image(img)
+
+prow <- plot_grid(
+  p1_img,
+  p6_img,
+  sub_map,
+  labels=c("A","B"), 
+  label_size = 15,
+  hjust=-1,
+  nrow=1,
+  ncol=3,
+  rel_widths = c(1,1,0.5)
+)
+
+
+prow
+```
