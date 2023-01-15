@@ -4,7 +4,7 @@
 
 ### Category Name 1 
 
-[Project 1 Title](/sample_page)
+[Project 1 Title](/Project1.html)
 <img src="images/TOCabstractAsset 8@4x-100 copy.jpg?raw=true"/>
 
 ---
