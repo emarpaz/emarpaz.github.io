@@ -5,10 +5,14 @@
 ### Real-time Water Quality Sensing
 
 [Node Architecture and Deployments](/Project1.html) 
+Learn how I built and deployed drinking water quality sensor nodes under kitchen sinks that measure water quality and relay data through the internet in real time. Here I compile information and data from our deployment locations in Mexico City and Ann Arbor. I include some of the R code I wrote to summarize and plot the signals.
+
 <img src="images/Asset 6@4x.png?raw=true"/>
 
 ---
-[Smart Flushing]()
+[Smart Flushing of Building Plumbing Taps]() 
+I designed an experiment to automatically flush building plumbing water using the same sensor nodes. For this experiment I developed an algorithm to process sensor data in real time to autonomously actuate the valve - think robotics. This experiment required a bit more cloud computing. Learn about my solution.
+
 <img src="images/smartflushicon.png?raw=true" width="200"/>
 ---
 
@@ -38,15 +42,16 @@ DOI: [10.1021/acsestengg.1c00259](https://pubs.acs.org/doi/abs/10.1021/acsesteng
 
 In 2018 I was awarded the Dow Masters Sustainability Fellowship at the University of Michigan and was involved in a 1-year long project working with a client. Together with my multidisciplinary team, we wrote this report for our client, [Isla Urbana](https://islaurbana.org/english/), where we detailed our findings and recommendations that would help them conceptualize a _conflict and concensus_ map among actors in eight axes of Mexico City's water sector. Isla Urbana oversaw the development of the project from framing the objective and the data collection approach to analysis. This report was not peer-reviewed.
 
-Ellen Abrams, Emily Plfeiderer, **Ernesto F. Martinez Paz**, Rachel Gutfreund. "Building sustainable water policy through mapping Mexico City’s water sector." [Read About It Here!](https://graham.umich.edu/activity/18066)
+- Ellen Abrams, Emily Plfeiderer, **Ernesto F. Martinez Paz**, Rachel Gutfreund. "Building sustainable water policy through mapping Mexico City’s water sector." [Read About It Here!](https://graham.umich.edu/activity/18066)
 
----
 
-We presented our findings at the annual Dow Sustainability Symposium.
-- Ellen Abrams, Emily Plfeiderer., **Ernesto F. Martinez Paz**, Rachel Gutfreund. "Building sustainable water policy through mapping Mexico City’s water sector." _Dow Sustainability Symposium_. Ann Arbor, Michigan. December 2018. [Slides](/pdf/Team 3_Isla Urbana_Final Dow Presentation.pdf)
----
+We presented our findings at the annual Dow Sustainability Symposium: 
+- Ellen Abramos, Emily Plfeiderer, **Ernesto F. Martinez Paz**, Rachel Gutfreund. "Building Sustainable water policy through mapping Mexico City's water sector." _Dow Sustainability Symposium_. Ann Arbor, Michigan. December 2018. [Slides](/pdf/Team 3_Isla Urbana_Final Dow Presentation.pdf) 
+
+
 We presented our preliminary results on a poster presentation at the Sustainability and Development Conference in Ann Arbor.
 - Ellen Abrams, Emily Plfeiderer., **Ernesto F. Martinez Paz**, Rachel Gutfreund. "Building sustainable water policy through mapping Mexico City’s water sector." _Sustainability and Development Conference_. Ann Arbor, Michigan. October 2018. [Poster]
+
 ---
 
 
