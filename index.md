@@ -43,7 +43,7 @@ Ellen Abrams, Emily Plfeiderer, **Ernesto F. Martinez Paz**, Rachel Gutfreund. "
 ---
 
 We presented our findings at the annual Dow Sustainability Symposium.
-- Ellen Abrams, Emily Plfeiderer., **Ernesto F. Martinez Paz**, Rachel Gutfreund. "Building sustainable water policy through mapping Mexico City’s water sector." _Dow Sustainability Symposium_. Ann Arbor, Michigan. December 2018. [Slides]()
+- Ellen Abrams, Emily Plfeiderer., **Ernesto F. Martinez Paz**, Rachel Gutfreund. "Building sustainable water policy through mapping Mexico City’s water sector." _Dow Sustainability Symposium_. Ann Arbor, Michigan. December 2018. [Slides](/pdf/Team 3_Isla Urbana_Final Dow Presentation.pdf)
 ---
 We presented our preliminary results on a poster presentation at the Sustainability and Development Conference in Ann Arbor.
 - Ellen Abrams, Emily Plfeiderer., **Ernesto F. Martinez Paz**, Rachel Gutfreund. "Building sustainable water policy through mapping Mexico City’s water sector." _Sustainability and Development Conference_. Ann Arbor, Michigan. October 2018. [Poster]
