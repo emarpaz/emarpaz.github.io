@@ -4,8 +4,8 @@
 
 ### Category Name 1 
 
-[Project 1 Title](/Project1.html)
-<img src="images/TOCabstractAsset 8@4x-100 copy.jpg?raw=true"/>
+[Water Quality Node Architecture](/Project1.html)
+<img src="images/Asset 6@4x.png?raw=true"/>
 
 ---
 [Project 2 Title](/pdf/sample_presentation.pdf)
