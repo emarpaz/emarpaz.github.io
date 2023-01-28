@@ -9,7 +9,7 @@
 
 ---
 [Smart Flushing]()
-<img src="images/smartflushicon.png?raw=true"/>
+<img src="images/smartflushicon.png?raw=true" width="200"/>
 ---
 
 ### Coding Solutions and Data Analysis 
