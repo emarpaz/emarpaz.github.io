@@ -10,14 +10,17 @@ Learn how I built and deployed drinking water quality sensor nodes under kitchen
 <img src="images/Asset 6@4x.png?raw=true"/>
 
 ---
-[Smart Flushing of Building Plumbing Taps]() 
+Smart Flushing of Building Plumbing Taps 
 I designed an experiment to automatically flush building plumbing water using the same sensor nodes. For this experiment I developed an algorithm to process sensor data in real time to autonomously actuate the valve - think robotics. This experiment required a bit more cloud computing. Learn about my solution.
+
+This branch is under construction.
 
 <img src="images/smartflushicon.png?raw=true" width="200"/>
 ---
 
-### Coding Solutions and Data Analysis 
-This section is under construction.
+### Coding for cloud solutions
+[Cloud Architecture and Smart Tools](/CloudSolutions.html) 
+![Cloud Architecture](images/Cloud_architecture.jpg)
 
 ### NESTSMX
 This section is under construction
