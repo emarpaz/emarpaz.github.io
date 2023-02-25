@@ -59,6 +59,11 @@ source("/Users/ernestof/Dropbox (University of Michigan)/from_box/Ernestom Macbo
 #function name is fetchinflux(node_id,parameter,t_start,t_end,tz) and inter_thresh(data,mintime)
 ```
 
+# Introduction 
+Utilities are required to monitor drinking water quality throughout the distribution system to ensure public health. Monitoring is almost entirely done through manual sampling, where an operator drives to several points of the system, grabs a sample, and analyzes in-situ for safety parameters (usually residual disinfectant and turbidity). These efforts to monitor miles worth of distribution systems are not only costly in terms of time and money, but also come at the cost of missing important measurable water quality dynamics throughout the system. There is an opportunity to introduce technology to increase the monitoring capabilities of utilities so they can continue to provide safe, treated, quality drinking water.
+Technological advancements in sensors, microcontrollers, communication networks, and computing power laid way to the movement called Internet of Things (IoT). Now deployed wireless sensor networks are increasingly being used to study infrastructure and natural systems at spatial and temporal resolutions never captured before. Wireless sensor networks therefore are the perfect tool to monitor drinking water systems, however, these tools do not exist. 
+In this project wireless sensor nodes were designed, built, and deployed in two full scale systems. ORP probes were used as a proxy measurement to residual disinfectant, conductivity, pH, pressure, and temperature were also measured. Results from the deployment highlight the importance of increased spatio-temporal resolution monitoring of drinking water systems by capturing both isolated and system-wide events. Additionally, the deployed network captured dynamics experienced in intermittent systems never captured before at this resolution.
+
 ## Maps
 
 ```{r maps}
