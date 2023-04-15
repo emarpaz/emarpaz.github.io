@@ -1,17 +1,19 @@
 title: Ernesto Martinez Paz # your name (or website title) here
 logo: "/images/headshotAsset 1@4x-100.jpg?raw=true" # your photo (or logo) here
 description: > # your text below (remove <br> elements if you don't need line breaks)
-  Hi, I am a PhD candidate in Environmental Engineering with training in data science, sensors, and ethnography.
+  Hi, I am a PhD candidate in Environmental Engineering with training in data science, sensors, and ethnography. I create open source hardware and software 
+  to study drinking water quality at the tap. 
   <br><br>
-  Here I share some samples of the work I did for my PhD dissertation at the University of Michigan. My overarching goal was to apply technology 
-  to better understand drinking water quality at the tap and develop tools to provide the best quality possible. 
+  My overarching goal is to develop tools to study water systems and implement creative next-generation solutions to the most pressing challenges 
+  on water treatment, quality, supply, and resources.
   
   <br><br>
-  <a href="https://www.linkedin.com/in/ernesto-martinez-paz-35599388/">View My LinkedIn Profile</a>
-  
-  <a href="https://github.com/emarpaz">Fork me in GitHub</a> 
-  
-  <a href="https://scholar.google.com/citations?hl=en&user=iadHLZ8AAAAJ">View my Google Scholar Profile</a>
+  Contact me at ernestom@umich.edu<br>
+  <a href="https://emarpaz.github.io/resume.pdf">View My Resume</a><br>
+  <a href="https://emarpaz.github.io/CV.pdf">View My CV</a><br>
+  <a href="https://www.linkedin.com/in/ernesto-martinez-paz-35599388/">View My LinkedIn Profile</a><br>
+  <a href="https://github.com/emarpaz">Fork me in GitHub</a><br>
+  <a href="https://scholar.google.com/citations?hl=en&user=iadHLZ8AAAAJ">View my Google Scholar Profile</a><br>
   
 theme: jekyll-theme-minimal
 google_analytics: UA-000000-0 # your Google Analytics tracking ID here
